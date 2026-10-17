@@ -56,3 +56,4 @@ function cekBilanganPrima(n) {
 4. Karena array kosong merepresentasikan 'tidak ada nilai (null)' untuk dicari terbesarnya, jika direturn 0 padahal array bisa berisi angka negatif, itu akan memberikan representasi nilai buatan yang salah secara logika matematis.
 5. `for` di `cariTerbesar` karena saya butuh mengakses indeks (`i`). `for...of` di `hapusDuplikat` karena saya hanya peduli pada nilai elemennya satu per satu, tidak butuh indeks.
 */
+//
