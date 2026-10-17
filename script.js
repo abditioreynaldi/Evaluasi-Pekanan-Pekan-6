@@ -269,3 +269,63 @@ for (let trx of transaksiBersih) {
 5. Karena untuk struk kita perlu merinci barang apa saja yang valid dijual dan ditolak, bukan sekadar angka harga akhirnya saja.
 6. `while` memastikan satu pecahan diulang pengurangannya selama sisa masih lebih besar. Bisa memakai `%` dan `/` (misal Math.floor(sisa / nominal)), hasilnya lebih efisien secara matematis.
 */
+
+// ==============================
+// BAGIAN 4: LAPORAN HARIAN
+// ==============================
+const laporan = {
+  jumlahTransaksi: kasir.riwayat.length,
+  jumlahLunas: kasir.riwayat.filter(r => r.status === "LUNAS").length,
+  jumlahKurang: kasir.riwayat.filter(r => r.status === "KURANG").length,
+  jumlahDitolak: kasir.riwayat.filter(r => r.status === "DITOLAK").length,
+  pendapatan: kasir.riwayat.filter(r => r.status === "LUNAS").reduce((acc, cur) => acc + cur.total, 0),
+  penjualanPerMenu: {},
+  daftarDitolak: kasir.riwayat.filter(r => r.status === "DITOLAK").map(r => ({ kode: r.kode, alasan: r.alasan })),
+  kodeLunas: [],
+  ringkasanKode: "",
+  menuStokMenipis: kasir.menu.filter(m => m.stok < 3).map(m => m.nama)
+};
+
+laporan.rataRata = laporan.jumlahLunas ? Number((laporan.pendapatan / laporan.jumlahLunas).toFixed(0)) : 0;
+laporan.transaksiTerbesar = kasir.riwayat.filter(r => r.status === "LUNAS").reduce((max, cur) => cur.total > max.total ? cur : max, { total: 0 });
+
+kasir.riwayat.filter(r => r.status === "LUNAS").forEach((trx) => {
+  laporan.kodeLunas.push(trx.kode);
+  if (laporan.ringkasanKode) laporan.ringkasanKode += ", ";
+  laporan.ringkasanKode += trx.kode;
+
+  trx.itemValid.forEach(item => {
+    if (item.menu in laporan.penjualanPerMenu) {
+      laporan.penjualanPerMenu[item.menu] += item.jumlah;
+    } else {
+      laporan.penjualanPerMenu[item.menu] = item.jumlah;
+    }
+  });
+});
+
+laporan.menuTerlaris = Object.keys(laporan.penjualanPerMenu).reduce((a, b) => laporan.penjualanPerMenu[a] > laporan.penjualanPerMenu[b] ? a : b, "");
+
+console.log(`\n=== LAPORAN HARIAN ${kedai.nama.toUpperCase()} ===`);
+for (let key in laporan.penjualanPerMenu) {
+  console.log(`${key}: ${laporan.penjualanPerMenu[key]} terjual`);
+}
+console.log("Object.keys penjualan:", Object.keys(laporan.penjualanPerMenu));
+console.log("Object.values penjualan:", Object.values(laporan.penjualanPerMenu));
+console.log("Pengecekan panjang ringkasanKode:", laporan.ringkasanKode.split(", ").length === laporan.jumlahLunas);
+
+// Demo array
+console.log("Includes TRX-001?", laporan.kodeLunas.includes("TRX-001"));
+console.log("Posisi TRX-001:", laporan.kodeLunas.indexOf("TRX-001"));
+const sliceKode = laporan.kodeLunas.slice();
+console.log("Slice 2 pertama:", sliceKode.slice(0, 2));
+sliceKode.splice(0, 1);
+console.log("Splice salinan:", sliceKode);
+console.log("Array kodeLunas asli tetap:", laporan.kodeLunas);
+
+/* Jawaban Bagian 4:
+1. Object dipakai karena kuncinya (nama menu) berupa string dinamis. Bracket notation dipakai karena propertinya tidak fix/diketahui saat coding.
+2. `Object.keys` mengambil array kunci (nama menu), `Object.values` mengambil array nilainya (jumlah).
+3. `slice` tidak mengubah array asli (membuat array baru), `splice` mengubah (mutasi) array aslinya. Buktinya variabel `kodeLunas` asli elemennya tidak hilang.
+4. Karena `toFixed()` mengembalikan string. Jika tidak diubah ke angka, perhitungan matematis selanjutnya berisiko menjadi penggabungan string (concatenation).
+5. Hasilnya `true`. Karena string `ringkasanKode` memisahkan tiap kode dengan `", "`, maka memisahkan string dengan pemisah tersebut memakai `.split()` akan menghasilkan array berjumlah sama persis dengan `jumlahLunas`.
+*/
