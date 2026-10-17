@@ -93,3 +93,179 @@ console.log("Transaksi Bersih:", transaksiBersih);
 4. Method string seperti `toUpperCase()` tidak mengubah variabel asli (immutable) melainkan mengembalikan string baru.
 5. Function declaration (`bersihkanNama`) bisa di-hoisting. Expression (`ubahKeAngka`) cocok disimpan di variabel. Arrow (`ambilPersenVoucher`) ringkas tanpa binding `this` baru.
 */
+
+// ==============================
+// BAGIAN 3: MESIN KASIR
+// ==============================
+const kasir = {
+  menu: menu,
+  saldoKas: 0,
+  riwayat: [],
+  pecahan: [50000, 20000, 10000, 5000, 2000, 1000],
+
+  cariMenu(nama) {
+    for (let m of this.menu) {
+      if (m.nama === nama) return m;
+    }
+    return null;
+  },
+
+  hitungSubtotal(pesanan) {
+    let subtotal = 0;
+    const itemValid = [];
+    const itemTidakValid = [];
+
+    for (let item of pesanan) {
+      const dataMenu = this.cariMenu(item.menu);
+      if (!dataMenu) {
+        itemTidakValid.push({ menu: item.menu, alasan: "Menu tidak ditemukan" });
+        continue;
+      }
+      if (item.jumlah <= 0) {
+        itemTidakValid.push({ menu: item.menu, alasan: "Jumlah tidak valid" });
+        continue;
+      }
+      if (dataMenu.stok < item.jumlah) {
+        itemTidakValid.push({ menu: item.menu, alasan: "Stok tidak cukup" });
+        continue;
+      }
+      subtotal += dataMenu.harga * item.jumlah;
+      itemValid.push({ menu: item.menu, jumlah: item.jumlah, harga: dataMenu.harga });
+    }
+    return { subtotal, itemValid, itemTidakValid };
+  },
+
+  hitungPromoHari(hari) {
+    let promo = 0;
+    switch (hari) {
+      case "jumat":
+        promo = 3000;
+        break;
+      case "sabtu":
+      case "minggu":
+        promo = 5000;
+        break;
+      default:
+        promo = 0;
+        break;
+    }
+    return promo;
+  },
+
+  hitungDiskon(subtotal, persenVoucher) {
+    let persenSub = 0;
+    if (subtotal >= 100000) persenSub = 15;
+    else if (subtotal >= 50000) persenSub = 10;
+    else if (subtotal >= 25000) persenSub = 5;
+
+    const persenFinal = Math.max(persenSub, persenVoucher);
+    return Math.round(subtotal * persenFinal / 100);
+  },
+
+  hitungPajak(nilai, tarif = 0.11) {
+    return Math.round(nilai * tarif);
+  },
+
+  hitungKembalianPecahan(kembalian) {
+    if (kembalian < 0) return null;
+    let sisa = kembalian;
+    const hasil = {};
+    for (let nominal of this.pecahan) {
+      let lembar = 0;
+      while (sisa >= nominal) {
+        sisa -= nominal;
+        lembar++;
+      }
+      if (lembar > 0) hasil[nominal] = lembar;
+    }
+    hasil.sisa = sisa;
+    return hasil;
+  },
+
+  prosesTransaksi(trx) {
+    if (!trx.pelanggan) {
+      const hasil = { kode: trx.kode, pelanggan: trx.pelanggan, status: "DITOLAK", alasan: "Nama pelanggan kosong" };
+      this.riwayat.push(hasil); return hasil;
+    }
+    if (!trx.pesanan.length) {
+      const hasil = { kode: trx.kode, pelanggan: trx.pelanggan, status: "DITOLAK", alasan: "Pesanan kosong" };
+      this.riwayat.push(hasil); return hasil;
+    }
+
+    const { subtotal, itemValid, itemTidakValid } = this.hitungSubtotal(trx.pesanan);
+    if (!itemValid.length) {
+      const hasil = { kode: trx.kode, pelanggan: trx.pelanggan, status: "DITOLAK", alasan: "Tidak ada item valid" };
+      this.riwayat.push(hasil); return hasil;
+    }
+
+    const promoHari = this.hitungPromoHari(trx.hari);
+    const diskon = this.hitungDiskon(subtotal, trx.persenVoucher);
+    let nilaiSetelahDiskon = subtotal - diskon - promoHari;
+    if (nilaiSetelahDiskon < 0) nilaiSetelahDiskon = 0;
+    
+    const pajak = this.hitungPajak(nilaiSetelahDiskon);
+    const total = nilaiSetelahDiskon + pajak;
+    const kembalian = trx.uangBayar - total;
+    const status = kembalian >= 0 ? "LUNAS" : "KURANG";
+    
+    let pecahanKembalian = null;
+    if (status === "LUNAS") {
+      itemValid.forEach(item => {
+        const m = this.cariMenu(item.menu);
+        m.stok -= item.jumlah;
+      });
+      this.saldoKas += total;
+      pecahanKembalian = this.hitungKembalianPecahan(kembalian);
+    }
+
+    const hasil = { kode: trx.kode, pelanggan: trx.pelanggan, status, subtotal, promoHari, diskon, pajak, total, uangBayar: trx.uangBayar, kembalian, pecahanKembalian, itemValid, itemTidakValid };
+    this.riwayat.push(hasil);
+    return hasil;
+  },
+
+  cetakStruk(hasil) {
+    console.log(`\n=== STRUK ${hasil.kode} ===`);
+    console.log(`Pelanggan: ${hasil.pelanggan || '-'}`);
+    if (hasil.status === "DITOLAK") {
+      console.log(`Status: DITOLAK\nAlasan: ${hasil.alasan}`);
+      return;
+    }
+    
+    console.log("Pesanan:");
+    hasil.itemValid.forEach((item, i) => console.log(`${i+1}. ${item.menu} (x${item.jumlah}) - ${formatRupiah(item.harga)}`));
+    if (hasil.itemTidakValid.length) {
+      console.log("Item Ditolak:");
+      hasil.itemTidakValid.forEach(item => console.log(`- ${item.menu}: ${item.alasan}`));
+    }
+    console.log(`Subtotal: ${formatRupiah(hasil.subtotal)}`);
+    console.log(`Promo Hari: -${formatRupiah(hasil.promoHari)}`);
+    console.log(`Diskon: -${formatRupiah(hasil.diskon)}`);
+    console.log(`Pajak: ${formatRupiah(hasil.pajak)}`);
+    console.log(`TOTAL: ${formatRupiah(hasil.total)}`);
+    console.log(`Bayar: ${formatRupiah(hasil.uangBayar)}`);
+    console.log(`Kembalian: ${formatRupiah(hasil.kembalian)}`);
+    console.log(`Status: ${hasil.status}`);
+    if (hasil.pecahanKembalian) {
+      console.log("Pecahan:", JSON.stringify(hasil.pecahanKembalian));
+    }
+  }
+};
+
+const TARGET_KAS = 1000000; // Ubah ke nilai kecil untuk eksperimen break
+for (let trx of transaksiBersih) {
+  const hasil = kasir.prosesTransaksi(trx);
+  kasir.cetakStruk(hasil);
+  if (kasir.saldoKas >= TARGET_KAS) {
+    console.log("Target kas tercapai");
+    break;
+  }
+}
+
+/* Jawaban Bagian 3:
+1. `this.menu` digunakan karena variabel berada dalam object instance. `this` merujuk pada object `kasir` itu sendiri.
+2. `switch` cocok karena mengecek nilai absolut (string hari). Saya tidak menulis `break` pada `case "sabtu":` agar langsung jatuh/gabung ke `"minggu"` (fall-through) karena promonya sama.
+3. `!trx.pesanan.length` bernilai benar (masuk if) jika length adalah 0 (0 itu falsy). Nilai Falsy: `false`, `0`, `""`, `null`, `undefined`, `NaN`.
+4. `break` (di loop TARGET_KAS) menghentikan perulangan sepenuhnya. `continue` (di `hitungSubtotal`) melompati sisa kode pada iterasi saat ini dan lanjut ke iterasi berikutnya.
+5. Karena untuk struk kita perlu merinci barang apa saja yang valid dijual dan ditolak, bukan sekadar angka harga akhirnya saja.
+6. `while` memastikan satu pecahan diulang pengurangannya selama sisa masih lebih besar. Bisa memakai `%` dan `/` (misal Math.floor(sisa / nominal)), hasilnya lebih efisien secara matematis.
+*/
